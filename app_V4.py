@@ -7,6 +7,91 @@ import plotly.graph_objects as go
 import os
 import json
 from datetime import datetime, timedelta
+st.session_state.clear()
+import streamlit as st
+from PIL import Image
+import streamlit as st
+from PIL import Image
+import base64
+import io
+
+# ===============================
+#   QuantumTrade™ – BLOOMBERG STYLE
+# ===============================
+
+site_name = "QuantumTrade™"
+
+# Chargement du logo ESIGELEC en Base64 (fiable sur tous les serveurs)
+def load_esigelec_logo():
+    img = Image.open("Logo_ESIGELEC.png")  # mets le fichier dans ton dossier
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    return encoded
+
+logo_base64 = load_esigelec_logo()
+
+# Page d’accueil
+st.markdown(
+    f"""
+    <style>
+        .main-title {{
+            color: #C084FF;
+            font-size: 58px;
+            font-weight: 800;
+            text-align: center;
+            letter-spacing: 1px;
+            text-shadow: 0px 0px 20px rgba(192, 132, 255, 0.6);
+            margin-bottom: -10px;
+        }}
+
+        .subtitle {{
+            color: #E0CCFF;
+            font-size: 22px;
+            text-align: center;
+            margin-top: -10px;
+            font-weight: 300;
+        }}
+
+        .welcome {{
+            text-align: center;
+            color: #D8D8FF;
+            font-size: 18px;
+            margin-top: 25px;
+        }}
+
+        .glow-line {{
+            width: 60%;
+            margin-left: auto;
+            margin-right: auto;
+            border: none;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(150,0,255,0) 0%, rgba(180,0,255,0.8) 50%, rgba(150,0,255,0) 100%);
+            margin-top: 35px;
+        }}
+    </style>
+
+    <h1 class="main-title">{site_name}</h1>
+
+    <p class="subtitle">
+        Plateforme avancée d’analyse boursière • ESIGELEC
+    </p>
+
+    <div style="text-align:center; margin-top:20px;">
+        <img src="data:image/png;base64,{logo_base64}" width="180" style="filter: drop-shadow(0px 0px 10px rgba(180,0,255,0.5));">
+    </div>
+
+    <hr class="glow-line">
+
+    <p class="welcome">
+        Bienvenue sur la plateforme QuantumTrade™.<br>
+        Sélectionnez une action dans le menu de gauche pour lancer l’analyse.
+    </p>
+    """,
+    unsafe_allow_html=True
+)
+
+
 #streamlit run app_V4.py
 
 # --------- Gestion de la liste d'actions enregistrées ---------
@@ -506,69 +591,98 @@ if st.session_state.analysis_done:
         st.subheader(f"📊 Courbe de l'action {ticker}")
 
         # Création de la figure Plotly
-        fig = go.Figure()
+        from plotly.subplots import make_subplots
+        # Création d'un graphique avec 4 sous-graphiques
+        fig = make_subplots(
+            rows=4,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.02,
+            row_heights=[0.45, 0.2, 0.2, 0.15]
+        )
 
-        # Courbe du cours de clôture
+        ### PANEL 1 — Cours + MM + Bollinger ###
+
+        # 1) COURBE DU COURS (TOUJOURS VISIBLE)
         fig.add_trace(
             go.Scatter(
                 x=df.index,
                 y=df["Close"],
-                mode="lines",
-                name="Close"
-            )
+                name="Cours",
+                line=dict(color="#FFD500", width=3)
+            ),
+            row=1, col=1
         )
 
-        # Ajout des moyennes mobiles si la méthode est sélectionnée
+        
+
+        if "Tendances" in methods:
+        # Régression linéaire
+            x = np.arange(len(df))
+            y = df["Close"].values
+            coeffs = np.polyfit(x, y, 1)
+            trendline = coeffs[0] * x + coeffs[1]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=trendline,
+                    name="Tendance",
+                    line=dict(color="cyan", width=2, dash="dash")
+                ),
+                row=1, col=1
+            )
+
         if "Moyennes Mobiles" in methods:
             for w in [20, 50, 200]:
                 col = f"MM{w}"
                 if col in df.columns:
                     fig.add_trace(
-                        go.Scatter(
-                            x=df.index,
-                            y=df[col],
-                            mode="lines",
-                            name=col
-                        )
+                        go.Scatter(x=df.index, y=df[col], name=col),
+                        row=1, col=1
                     )
 
-        # Ajout des bandes de Bollinger si sélectionné
         if "Bollingers" in methods:
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=upper,
-                    mode="lines",
-                    name="Bollinger Haut",
-                    line=dict(dash="dash")
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=lower,
-                    mode="lines",
-                    name="Bollinger Bas",
-                    line=dict(dash="dash")
-                )
-            )
+            fig.add_trace(go.Scatter(x=df.index, y=upper, name="Bollinger Haut", line=dict(dash="dash")), row=1, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=lower, name="Bollinger Bas", line=dict(dash="dash")), row=1, col=1)
 
-        # Mise en forme générale du graphique
+        # ============================
+        #   PANEL 2 — MACD
+        # ============================
+        if "MACD" in methods:
+            fig.add_trace(go.Scatter(x=df.index, y=macd_line, name="MACD", line=dict(color="cyan")), row=2, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=signal_line, name="Signal", line=dict(color="orange")), row=2, col=1)
+            fig.add_trace(go.Bar(x=df.index, y=macd_hist, name="MACD hist"), row=2, col=1)
+
+        # ============================
+        #   PANEL 3 — RSI
+        # ============================
+        if "RSI" in methods:
+            fig.add_trace(go.Scatter(x=df.index, y=rsi_series, name="RSI", line=dict(color="yellow")), row=3, col=1)
+            fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+            fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+
+        # ============================
+        #   PANEL 4 — STOCH + VOLUME
+        # ============================
+        if "Stochastique" in methods:
+            fig.add_trace(go.Scatter(x=df.index, y=k, name="%K", line=dict(color="magenta")), row=4, col=1)
+            fig.add_trace(go.Scatter(x=df.index, y=d, name="%D", line=dict(color="lightgreen")), row=4, col=1)
+
+        if "Volumes (partie 1)" in methods or "Volumes (partie 2)" in methods:
+            fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="Volume", marker=dict(color="grey")), row=4, col=1)
+
+        # ============================
+        #   FORMAT GLOBAL
+        # ============================
         fig.update_layout(
-            title=f"Cours de {ticker}",
-            xaxis_title="Date",
-            yaxis_title="Prix",
+            height=1200,
             template="plotly_dark",
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
+            showlegend=True
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
 
         # ---------- Données importantes ----------
         st.subheader("📌 Données importantes")
